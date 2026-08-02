@@ -334,3 +334,136 @@ async fn mock_order_cancellation_and_sell_side() {
     let orders = svc.orders_for_run(&run.id).unwrap();
     assert!(orders.iter().any(|o| o.status == "canceled"));
 }
+
+#[tokio::test]
+async fn yaml_import_valid_and_invalid() {
+    let dir = tempfile::tempdir().unwrap();
+    let svc = service(dir.path());
+
+    // Valid YAML imports and round-trips through export.
+    let yaml = r#"
+schema_version: 1
+name: Imported Sixty Forty
+assets:
+  - symbol: voo
+    target_weight: 0.6
+  - symbol: bnd
+    target_weight: 0.4
+risk_controls:
+  maximum_position_weight: 0.65
+"#;
+    let imported = svc.import_strategy_yaml(yaml).unwrap();
+    assert_eq!(imported.name, "Imported Sixty Forty");
+    // Symbols normalized to uppercase on import.
+    assert!(imported.doc.assets.iter().any(|a| a.symbol == "VOO"));
+    let exported = svc.export_strategy_yaml(&imported.id).unwrap();
+    assert!(exported.contains("VOO"));
+
+    // Invalid YAML fails with a readable message, not a parser dump.
+    let bad = "schema_version: 1\nname: Bad\nassets:\n  - symbol: AAPL\n    target_weight: 0.7\n  - symbol: AAPL\n    target_weight: 0.3\nrisk_controls:\n  maximum_position_weight: 0.9\n";
+    let err = svc.import_strategy_yaml(bad).unwrap_err();
+    assert!(err.user_message().contains("more than once"));
+
+    // Broken syntax also maps to a friendly error.
+    let err2 = svc.import_strategy_yaml("::not yaml::").unwrap_err();
+    assert!(err2.user_message().contains("could not be read"));
+}
+
+#[tokio::test]
+async fn demo_reset_restores_deterministic_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let svc = service(dir.path());
+    let conn = svc
+        .create_connection("mock", "Demo", BrokerSecrets::default(), None)
+        .await
+        .unwrap();
+    let account_id = conn.accounts[0].id.clone();
+    let before = svc.stored_positions(&conn.id, &account_id).unwrap();
+
+    // Trade to mutate demo state, wait for the fill, sync.
+    let doc = strategy::equal_weight("Mutate", None, &["QQQ".into()]).unwrap();
+    let saved = svc.save_strategy("equal_weight", &doc, None).unwrap();
+    let run = svc
+        .run_rebalance(&conn.id, &account_id, &saved.id)
+        .await
+        .unwrap();
+    svc.approve_and_submit(&run.id, true).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+    svc.sync_connection(&conn.id, "manual").await.unwrap();
+    let mutated = svc.stored_positions(&conn.id, &account_id).unwrap();
+    assert_ne!(
+        serde_json::to_string(&before).unwrap(),
+        serde_json::to_string(&mutated).unwrap(),
+        "trading changed the portfolio"
+    );
+
+    // Reset restores the exact seed portfolio.
+    svc.reset_demo().unwrap();
+    svc.sync_connection(&conn.id, "manual").await.unwrap();
+    let after = svc.stored_positions(&conn.id, &account_id).unwrap();
+    let symbols: Vec<&str> = after.iter().map(|p| p.symbol.as_str()).collect();
+    assert_eq!(
+        symbols.len(),
+        6,
+        "seed portfolio has 6 positions: {symbols:?}"
+    );
+    let aapl = after.iter().find(|p| p.symbol == "AAPL").unwrap();
+    assert_eq!(aapl.quantity, 42.0);
+}
+
+#[tokio::test]
+async fn csv_export_content_is_correct() {
+    let dir = tempfile::tempdir().unwrap();
+    let svc = service(dir.path());
+    let conn = svc
+        .create_connection("mock", "Demo", BrokerSecrets::default(), None)
+        .await
+        .unwrap();
+    let account_id = conn.accounts[0].id.clone();
+    let csv = svc.positions_csv(&conn.id, &account_id).unwrap();
+    let lines: Vec<&str> = csv.lines().collect();
+    assert_eq!(
+        lines[0],
+        "symbol,quantity,current_price,market_value,cost_basis,unrealized_pl"
+    );
+    assert_eq!(lines.len(), 7, "header + 6 seed positions");
+    assert!(lines.iter().any(|l| l.starts_with("AAPL,42,")));
+
+    // save_export writes only sanitized basenames.
+    let path = svc.save_export("positions-test.csv", &csv).unwrap();
+    let written = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(written, csv);
+    std::fs::remove_file(&path).ok();
+    // Path traversal attempts are rejected or neutralized.
+    assert!(
+        svc.save_export("../evil.csv", "x").is_err() || {
+            let p = svc.save_export("../evil.csv", "x").unwrap();
+            let ok = !p.contains("..");
+            std::fs::remove_file(&p).ok();
+            ok
+        }
+    );
+}
+
+#[tokio::test]
+async fn cancel_all_open_orders() {
+    let dir = tempfile::tempdir().unwrap();
+    let svc = service(dir.path());
+    let conn = svc
+        .create_connection("mock", "Demo", BrokerSecrets::default(), None)
+        .await
+        .unwrap();
+    let account_id = conn.accounts[0].id.clone();
+    let doc =
+        strategy::equal_weight("EW", None, &["AAPL".into(), "MSFT".into(), "VOO".into()]).unwrap();
+    let saved = svc.save_strategy("equal_weight", &doc, None).unwrap();
+    let run = svc
+        .run_rebalance(&conn.id, &account_id, &saved.id)
+        .await
+        .unwrap();
+    let submitted = svc.approve_and_submit(&run.id, true).await.unwrap();
+    let open = submitted.iter().filter(|o| o.status == "accepted").count();
+    assert!(open > 0);
+    let canceled = svc.cancel_all_open(&conn.id).await.unwrap();
+    assert_eq!(canceled as usize, open);
+}

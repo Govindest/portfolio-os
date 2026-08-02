@@ -132,14 +132,18 @@ impl BrokerAdapter for AlpacaBroker {
     async fn test_connection(&self) -> Result<ConnectionStatus, BrokerError> {
         let url = format!("{}/v2/account", self.trading_base);
         let body = Self::handle(self.req(reqwest::Method::GET, url).send().await?).await?;
-        // Paper accounts on paper-api always are paper; double-check the flag if present.
-        let live = body["account_number"].as_str().is_some()
-            && body["pattern_day_trader"].is_boolean()
-            && body["is_paper"] == json!(false);
-        if live {
-            return Err(BrokerError::Validation(ErrorDetail {
-                user_message: "This account is configured for live trading. PortfolioOS version 1 supports paper trading only.".into(),
-                technical: None,
+        // Live-trading protection is structural: this adapter only ever talks to
+        // paper-api.alpaca.markets, and Alpaca rejects live-account keys there
+        // with 401 (mapped to a friendly Authentication error above). There is
+        // no client-side flag to double-check — the account payload has none.
+        if body["account_number"].as_str().is_none() && body["id"].as_str().is_none() {
+            return Err(BrokerError::UnknownResponse(ErrorDetail {
+                user_message: "Alpaca responded, but the account payload was not recognized."
+                    .into(),
+                technical: Some(format!(
+                    "keys: {:?}",
+                    body.as_object().map(|o| o.keys().collect::<Vec<_>>())
+                )),
             }));
         }
         Ok(ConnectionStatus {

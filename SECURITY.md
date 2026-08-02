@@ -16,6 +16,14 @@ PortfolioOS is a local desktop app. Especially interesting reports:
 - YAML strategy import leading to anything other than validated data (it must never execute)
 - SQL injection through user-supplied symbols, names, or CSV imports
 
+## Security assumptions
+
+- The machine running PortfolioOS is trusted: anyone with your OS user session can use the app and, through your OS credential store, the brokerage keys it holds. PortfolioOS adds no second password layer.
+- The OS credential store (Keychain / Credential Manager / Secret Service) provides at-rest protection for secrets; the SQLite database is not encrypted and contains no secrets, but does contain your portfolio data.
+- TLS certificate validation is enforced for all brokerage traffic, with one deliberate exception: the Interactive Brokers Client Portal Gateway on `https://localhost:5000` uses a self-signed certificate, so verification is disabled for that localhost-only connection.
+- The frontend runs in the system webview under a restrictive CSP (`default-src 'self'`) with only the minimal `core:default` Tauri capability; it can only reach the backend through the typed command list, none of which return stored secrets.
+- macOS builds are currently unsigned and not notarized; Gatekeeper will warn on first launch.
+
 ## Design guarantees we intend to keep
 
 - Secrets only in the OS credential store (Keychain / Credential Manager / Secret Service)

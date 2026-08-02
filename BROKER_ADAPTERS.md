@@ -36,7 +36,7 @@ Rules for adapters:
 | Adapter | File | Notes |
 | --- | --- | --- |
 | Mock | `broker/mock.rs` | Deterministic prices/positions; orders fill 3 s after submission; state persists to `mock_broker_state.json`; dedupes by client order id. |
-| Alpaca | `broker/alpaca.rs` | `paper-api.alpaca.markets` + `data.alpaca.markets` (IEX feed). Paper only; market day orders; fractional supported. |
+| Alpaca | `broker/alpaca.rs` | `paper-api.alpaca.markets` + `data.alpaca.markets` (IEX feed). Paper only; market day orders; fractional supported. Live-account protection is structural: the adapter only ever addresses the paper host, which rejects live keys with 401. |
 | Tradier | `broker/tradier.rs` | `sandbox.tradier.com/v1`. Preview via `preview=true`; whole shares; delayed sandbox quotes flagged stale. Beta. |
 | IBKR | `broker/ibkr.rs` | Local Client Portal Gateway (`https://localhost:5000/v1/api`), self-signed cert accepted for localhost only. Read-only: `supports_trading() == false`. |
 

@@ -52,6 +52,9 @@ docs/                 JSON Schema + screenshots
 - `tests/e2e.rs` drives the real service layer (real SQLite, mock broker, in-memory credential store) through the complete user journey, including crash-safe idempotent submission, emergency stop, disconnect-removes-credentials, and restart persistence.
 - Broker HTTP behavior is tested against canned localhost responses (`one_shot_http`); no test needs real credentials or network access.
 - Frontend tests mock the IPC layer with `@tauri-apps/api/mocks`.
+- `cargo run --example seed_demo -- "<app-data-dir>"` populates the real app database with a demo connection, strategy, and rebalance — useful for exercising the native app without clicking through onboarding.
+
+Current counts: 30 Rust unit tests, 13 service-level end-to-end tests, 20 frontend tests.
 
 ## Where local data lives
 

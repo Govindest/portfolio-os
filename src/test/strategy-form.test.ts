@@ -47,6 +47,22 @@ describe("strategy form validation", () => {
     expect(JSON.stringify(r.error?.issues)).toContain("must total 100%");
   });
 
+  it("accepts equal-weight strategies whose weights are still zero", () => {
+    // Regression: the editor never renders a weight input in equal-weight mode,
+    // so appended rows keep weight 0. A field-level positive() check here made
+    // the submit button silently do nothing.
+    const r = formSchema.safeParse({
+      ...base,
+      kind: "equal_weight",
+      assets: [
+        { symbol: "AAPL", weight: 0 },
+        { symbol: "MSFT", weight: 0 },
+        { symbol: "VOO", weight: 0 },
+      ],
+    });
+    expect(r.success).toBe(true);
+  });
+
   it("ignores weight totals for equal-weight strategies", () => {
     const r = formSchema.safeParse({
       ...base,
@@ -70,14 +86,24 @@ describe("strategy form validation", () => {
     expect(r.success).toBe(false);
   });
 
-  it("rejects zero or negative weights", () => {
-    const r = formSchema.safeParse({
+  it("rejects zero or negative weights in custom allocations", () => {
+    const zero = formSchema.safeParse({
       ...base,
       assets: [
         { symbol: "AAPL", weight: 0 },
         { symbol: "MSFT", weight: 100 },
       ],
     });
-    expect(r.success).toBe(false);
+    expect(zero.success).toBe(false);
+    expect(JSON.stringify(zero.error?.issues)).toContain("greater than 0");
+
+    const negative = formSchema.safeParse({
+      ...base,
+      assets: [
+        { symbol: "AAPL", weight: -10 },
+        { symbol: "MSFT", weight: 110 },
+      ],
+    });
+    expect(negative.success).toBe(false);
   });
 });

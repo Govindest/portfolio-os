@@ -64,10 +64,13 @@ export default function Portfolio() {
 
   if (!activeConnection || !activeAccountId) {
     return (
-      <EmptyState
-        title="No brokerage connected"
-        description="Connect a brokerage to see positions."
-      />
+      <div className="space-y-5">
+        <h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1>
+        <EmptyState
+          title="No brokerage connected"
+          description="Connect a brokerage to see positions."
+        />
+      </div>
     );
   }
 

@@ -31,7 +31,9 @@ const assetSchema = z.object({
     .min(1, "Symbol is required")
     .max(10)
     .regex(/^[A-Za-z][A-Za-z0-9.]*$/, "Letters, numbers, and dots only"),
-  weight: z.coerce.number().positive("Must be positive").max(100, "Cannot exceed 100%"),
+  // Equal-weight strategies never show a weight input, so weights stay 0 there.
+  // Positivity is enforced below, only for custom allocations.
+  weight: z.coerce.number().min(0, "Cannot be negative").max(100, "Cannot exceed 100%"),
 });
 
 export const formSchema = z
@@ -54,6 +56,15 @@ export const formSchema = z
       });
     }
     if (data.kind === "custom") {
+      data.assets.forEach((a, i) => {
+        if (a.weight <= 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["assets", i, "weight"],
+            message: "Must be greater than 0",
+          });
+        }
+      });
       const total = data.assets.reduce((s, a) => s + a.weight, 0);
       if (Math.abs(total - 100) > 0.5) {
         ctx.addIssue({
@@ -84,6 +95,9 @@ export default function Strategies() {
     onSuccess: () => {
       setDeleting(null);
       void qc.invalidateQueries({ queryKey: ["strategies"] });
+      // The dashboard's drift card and active-strategy label come from
+      // get_dashboard, so it has to refresh too.
+      void qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 
@@ -205,17 +219,26 @@ export default function Strategies() {
         open={editorOpen}
         onOpenChange={setEditorOpen}
         editing={editing}
-        onSaved={() => void qc.invalidateQueries({ queryKey: ["strategies"] })}
+        onSaved={() => {
+          void qc.invalidateQueries({ queryKey: ["strategies"] });
+          void qc.invalidateQueries({ queryKey: ["dashboard"] });
+        }}
       />
       <ImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}
-        onImported={() => void qc.invalidateQueries({ queryKey: ["strategies"] })}
+        onImported={() => {
+          void qc.invalidateQueries({ queryKey: ["strategies"] });
+          void qc.invalidateQueries({ queryKey: ["dashboard"] });
+        }}
       />
       <MomentumDialog
         open={momentumOpen}
         onOpenChange={setMomentumOpen}
-        onCreated={() => void qc.invalidateQueries({ queryKey: ["strategies"] })}
+        onCreated={() => {
+          void qc.invalidateQueries({ queryKey: ["strategies"] });
+          void qc.invalidateQueries({ queryKey: ["dashboard"] });
+        }}
       />
       <ConfirmDialog
         open={deleting !== null}
@@ -247,6 +270,7 @@ function StrategyEditor({
     defaultValues: defaultsFrom(editing),
   });
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "assets" });
+  const [submitBlocked, setSubmitBlocked] = React.useState(false);
   const kind = form.watch("kind");
   const assets = form.watch("assets");
 
@@ -302,7 +326,19 @@ function StrategyEditor({
             never trades without your approval.
           </DialogDescription>
         </DialogHeader>
-        <form className="space-y-4" onSubmit={form.handleSubmit((v) => save.mutate(v))} noValidate>
+        <form
+          className="space-y-4"
+          onSubmit={form.handleSubmit(
+            (v) => {
+              setSubmitBlocked(false);
+              save.mutate(v);
+            },
+            // Never let an invalid submit fail silently: some fields (weights in
+            // equal-weight mode) have no visible input to attach an error to.
+            () => setSubmitBlocked(true),
+          )}
+          noValidate
+        >
           <div className="space-y-1.5">
             <Label htmlFor="st-name">Name</Label>
             <Input id="st-name" {...form.register("name")} placeholder="Core index mix" />
@@ -415,6 +451,11 @@ function StrategyEditor({
             </div>
           </div>
 
+          {submitBlocked && Object.keys(form.formState.errors).length > 0 && (
+            <p className="text-sm text-destructive" role="alert">
+              Some details still need attention. Check the highlighted fields above.
+            </p>
+          )}
           {save.isError && <ErrorNote error={save.error} />}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

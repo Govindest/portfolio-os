@@ -96,17 +96,23 @@ const BROKERS: BrokerCardInfo[] = [
   },
 ];
 
-const SETUP_STEPS: Record<string, { steps: string[]; docsUrl: string; docsLabel: string }> = {
+const SETUP_STEPS: Record<
+  string,
+  { steps: string[]; docsUrl: string; docsLabel: string; footnote?: string }
+> = {
   alpaca: {
     steps: [
-      "Open or create an Alpaca account.",
-      "Switch the dashboard to paper trading (toggle in the top-left).",
-      "Generate paper API credentials under “API Keys”.",
-      "Copy the API key and secret.",
-      "Paste them below, then test the connection.",
+      "Create a free account at app.alpaca.markets (no funding required for paper trading).",
+      "In the dashboard, use the account switcher in the top-left and choose Paper Trading.",
+      "On the paper overview page, find the API Keys panel and click Generate New Keys.",
+      "Copy the shorter value labeled “API Key ID” (it starts with PK) — that is your API key.",
+      "Copy the longer value labeled “Secret Key” — Alpaca shows it only once; that is your API secret.",
+      "Paste both below, click Test connection, then Save and continue.",
     ],
     docsUrl: "https://docs.alpaca.markets/docs/getting-started",
     docsLabel: "Alpaca setup guide",
+    footnote:
+      "To disconnect later, use Brokerages → Disconnect. That removes the stored credentials from your computer; you can also revoke the key in the Alpaca dashboard.",
   },
   tradier: {
     steps: [
@@ -120,13 +126,15 @@ const SETUP_STEPS: Record<string, { steps: string[]; docsUrl: string; docsLabel:
   },
   ibkr: {
     steps: [
-      "Install and start the IBKR Client Portal Gateway on this computer.",
-      "Sign in to the gateway through its browser window (use a paper account).",
-      "Keep the gateway running while you use PortfolioOS.",
+      "Install and start the IBKR Client Portal Gateway on this computer (it listens on https://localhost:5000).",
+      "Sign in through the gateway's browser window — use a paper account. PortfolioOS never sees your IBKR password.",
+      "Keep the gateway running while you use PortfolioOS; IBKR sessions expire and may need re-login.",
       "Test the connection below — PortfolioOS talks only to your local gateway.",
     ],
     docsUrl: "https://www.interactivebrokers.com/campus/ibkr-api-page/cpapi-v1/",
     docsLabel: "Client Portal Gateway guide",
+    footnote:
+      "This integration is read-only in this version: balances and positions sync, but PortfolioOS cannot place IBKR orders.",
   },
 };
 
@@ -291,6 +299,11 @@ export function ConnectWizard({
             >
               <ExternalLink className="h-3.5 w-3.5" aria-hidden /> {guide.docsLabel}
             </a>
+            {guide.footnote && (
+              <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
+                {guide.footnote}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}

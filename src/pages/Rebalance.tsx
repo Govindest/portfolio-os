@@ -75,26 +75,32 @@ export default function Rebalance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayOrders?.every((o) => o.status === "filled")]);
 
+  // Empty states keep the page heading so the document outline and screen-reader
+  // navigation stay consistent across every route.
   if (!activeConnection || !activeAccountId) {
     return (
-      <EmptyState
-        title="No brokerage connected"
-        description="Connect a brokerage before rebalancing."
-      />
+      <PageShell>
+        <EmptyState
+          title="No brokerage connected"
+          description="Connect a brokerage before rebalancing."
+        />
+      </PageShell>
     );
   }
   if (!strategies || strategies.length === 0) {
     return (
-      <EmptyState
-        icon={Scale}
-        title="No strategy to rebalance against"
-        description="Create a strategy first — the rebalancer compares your holdings to its target weights."
-        action={
-          <Link to="/strategies" className={buttonVariants()}>
-            Create a strategy
-          </Link>
-        }
-      />
+      <PageShell>
+        <EmptyState
+          icon={Scale}
+          title="No strategy to rebalance against"
+          description="Create a strategy first — the rebalancer compares your holdings to its target weights."
+          action={
+            <Link to="/strategies" className={buttonVariants()}>
+              Create a strategy
+            </Link>
+          }
+        />
+      </PageShell>
     );
   }
 
@@ -376,6 +382,20 @@ export default function Rebalance() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function PageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Rebalance</h1>
+        <p className="text-sm text-muted-foreground">
+          Preview the trades a strategy implies. Nothing is submitted without your approval.
+        </p>
+      </div>
+      {children}
     </div>
   );
 }

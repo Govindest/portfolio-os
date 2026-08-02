@@ -53,15 +53,18 @@ export default function Overview() {
 
   if (!activeConnection) {
     return (
-      <EmptyState
-        title="No brokerage connected"
-        description="Connect a brokerage or explore demo mode to see your portfolio here."
-        action={
-          <Link to="/brokerages" className={buttonVariants()}>
-            Connect a brokerage
-          </Link>
-        }
-      />
+      <div className="space-y-5">
+        <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
+        <EmptyState
+          title="No brokerage connected"
+          description="Connect a brokerage or explore demo mode to see your portfolio here."
+          action={
+            <Link to="/brokerages" className={buttonVariants()}>
+              Connect a brokerage
+            </Link>
+          }
+        />
+      </div>
     );
   }
 

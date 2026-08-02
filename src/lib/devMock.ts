@@ -147,7 +147,7 @@ function appState(): AppState {
     onboarding_completed: db.onboarded,
     onboarding_step: "welcome",
     connections: db.connections,
-    version: "0.1.0-browser-preview",
+    version: "0.1.0",
   };
 }
 
